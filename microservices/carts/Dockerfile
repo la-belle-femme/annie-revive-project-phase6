@@ -1,3 +1,7 @@
-FROM public.ecr.aws/aws-containers/retail-store-sample-cart:0.2.0 
-EXPOSE 7575 
-ENV APP=REVIVE
+FROM bettysami/s5annie-revive-assets:latest
+
+COPY assets/default.conf /etc/nginx/nginx.conf
+
+EXPOSE 8080
+
+CMD ["nginx", "-g", "daemon off;"]
