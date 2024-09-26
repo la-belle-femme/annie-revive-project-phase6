@@ -1,0 +1,149 @@
+version: '3.8'
+
+services:
+  
+  # RabbitMQ Service
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - APP=REVIVE
+    networks:
+      - app-network
+
+  # Orders Database (MariaDB)
+  orders-db:
+    image: mariadb:10.9
+    container_name: orders-db
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=ordersdb
+      - APP=REVIVE
+    volumes:
+      - orders-db-data:/var/lib/mysql
+    networks:
+      - app-network
+
+  # Orders Service
+  orders:
+    image: public.ecr.aws/aws-containers/retail-store-sample-orders:0.2.0
+    container_name: orders
+    environment:
+      - APP=REVIVE
+    depends_on:
+      - orders-db
+    ports:
+      - "8081:8081"
+    networks:
+      - app-network
+
+  # Redis for Checkout Service
+  checkout-redis:
+    image: redis:6-alpine
+    container_name: checkout-redis
+    environment:
+      - APP=REVIVE
+    networks:
+      - app-network
+
+  # Checkout Service
+  checkout:
+    image: public.ecr.aws/aws-containers/retail-store-sample-checkout:0.2.0
+    container_name: checkout
+    environment:
+      - APP=REVIVE
+    depends_on:
+      - checkout-redis
+    ports:
+      - "8082:8082"
+    networks:
+      - app-network
+
+  # Carts Database (DynamoDB Local)
+  carts-db:
+    image: amazon/dynamodb-local:1.20.0
+    container_name: carts-db
+    environment:
+      - APP=REVIVE
+    ports:
+      - "8000:8000"
+    networks:
+      - app-network
+
+  # Cart Service
+  cart:
+    image: public.ecr.aws/aws-containers/retail-store-sample-cart:0.2.0
+    container_name: cart
+    environment:
+      - APP=REVIVE
+    depends_on:
+      - carts-db
+    ports:
+      - "7575:7575"
+    networks:
+      - app-network
+
+  # Catalog Database (MariaDB)
+  catalog-db:
+    image: mariadb:10.9
+    container_name: catalog-db
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=catalogdb
+      - APP=REVIVE
+    volumes:
+      - catalog-db-data:/var/lib/mysql
+    networks:
+      - app-network
+
+  # Catalog Service
+  catalog:
+    image: public.ecr.aws/aws-containers/retail-store-sample-catalog:0.2.0
+    container_name: catalog
+    environment:
+      - APP=REVIVE
+    depends_on:
+      - catalog-db
+    ports:
+      - "8083:8083"
+    networks:
+      - app-network
+
+  # Assets Service (Nginx)
+  assets:
+    image: amazonlinux:2
+    container_name: assets
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/nginx.conf
+      - ./nginx/mime.types:/etc/nginx/mime.types
+      - ./public/:/usr/share/nginx/html
+    networks:
+      - app-network
+    environment:
+      - APP=REVIVE
+    command: ["nginx", "-g", "daemon off;"]
+
+  # UI Service
+  ui:
+    image: public.ecr.aws/aws-containers/retail-store-sample-ui:0.2.0
+    container_name: ui
+    environment:
+      - APP=REVIVE
+    ports:
+      - "8084:8084"
+    networks:
+      - app-network
+
+# Define a custom network for all services
+networks:
+  app-network:
+
+# Define volumes for persistent data
+volumes:
+  orders-db-data:
+  catalog-db-data:

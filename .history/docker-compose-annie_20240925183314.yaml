@@ -1,0 +1,182 @@
+version: '3.0'
+services:
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3-management
+    environment:
+      - name=value
+      - name=value
+    expose:
+      - 5672
+      - 15672
+    ports:
+      - 5672:5672
+      - 15672:15672
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq:/var/lib/rabbitmq    
+    networks:
+      - revive
+    restart: always
+  #  depends_on:    
+
+  orders-db:
+    container_name: orders-db
+    image: mariadb:10.9
+    environment:
+      - DB_PASSWORD:
+      - DB_USER: orders_user
+      - DB_DATABASE: orders
+    expose:
+      - 3306
+    ports:
+      - 3306:3306
+    volumes:
+      - orders-db:/var/lib/mysql    
+    networks:
+      - revive
+    restart: always
+    depends_on: 
+      - rabbitmq
+
+  orders:
+    container_name: orders
+    image: public.ecr.aws/aws-containers/retail-store-sample-orders:0.2.0
+    environment:
+      - DB_HOST: orders-db
+      - DB_USER: orders_user
+      - DB_PASSWORD: 
+    expose:
+      - 8080
+    ports:
+      - 8080:8080
+    # volumes:
+    #   - orders-db:/var/lib/mysql    
+    networks:
+      - revive
+    restart: always
+    depends_on: 
+      - rabbitmq  
+      - orders-db    
+
+  checkout-redis:
+    container_name: checkout-redis
+    image: 
+    # environment:
+    #   - DB_HOST: orders-db
+    #   - DB_USER: orders_user
+    #   - DB_PASSWORD: 
+    expose:
+      - 8080
+    ports:
+      - 6379:8080
+    # volumes:
+    #   - checkout-redis:/data    
+    networks:
+      - revive
+    restart: always
+    # depends_on: 
+    #   - rabbitmq  
+    #   - orders-db 
+
+  checkout:
+    container_name: checkout
+    image: 
+    environment:
+      - REDIS_URL: redis://checkout-redis:6379
+      - ENDPOINTS_ORDERS: http://orders:8080
+    read_only: true  
+    tmpfs:
+    - /tmp:rw,noexec,nosuid
+    # ports:
+    #   - 6379:8080
+    # # volumes:
+    #   - checkout-redis:/data    
+    networks:
+      - revive
+    restart: always
+    depends_on: 
+      - checkout-redis  
+      - orders
+
+  cart-db:
+    container_name: cart-db
+    image: amazon/dynamodb-local:1.20.0
+    environment:
+      - JAVA_OPTS: -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/urandom
+      - SERVER_TOMCAT_ACCESSLOG_ENABLED: true
+      - SPRING_PROFILES_ACTIVE: mysql,rabbitmq
+      - SPRING_DATASOURCE_WRITER_URL: jdbc:mariadb://orders-db:3306/orders
+      - SPRING_DATASOURCE_WRITER_USERNAME: orders_user
+      - SPRING_DATASOURCE_WRITER_PASSWORD:
+      - SPRING_DATASOURCE_READER_URL: jdbc:mariadb://orders-db:3306/orders
+      - SPRING_DATASOURCE_READER_USERNAME: orders_user
+      - SPRING_DATASOURCE_READER_PASSWORD: 
+      - SPRING_RABBITMQ_HOST: rabbitmqNDPOINTS_ORDERS: http://orders:8080
+    expose:
+      - 8080
+    ports:
+      - 8080:8080
+    volumes:
+      - cart-db:/var/lib/mysql    
+    networks:
+      - revive
+    restart: always
+    # depends_on: 
+    #   - checkout-redis  
+    #   - orders      
+
+  catalog-db:
+    container_name: catalog-db
+    image: mariadb:10.9
+    environment:
+      - DB_PASSWORD:
+      - DB_USER: catalog_user
+      - DB_DATABASE: catalog
+    # expose:
+    #   - 8080
+    # ports:
+    #   - 8080:8080
+    volumes:
+      - catalog-db:/var/lib/mysql    
+    networks:
+      - revive
+    restart: always
+    # depends_on: 
+    #   - checkout-redis  
+    #   - orders      
+
+  assets:
+    container_name: assets
+    image: amazonlinux:2
+    expose:
+      - 8080
+    ports:
+      - 8080:8080
+    networks:
+      - revive
+    restart: always
+
+  ui:
+    container_name: ui
+    image: public.ecr.aws/aws-containers/retail-store-sample-ui:0.2.0
+    environment:
+         JAVA_OPTS: -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/urandom
+         SERVER_TOMCAT_ACCESSLOG_ENABLED: true
+         ENDPOINTS_CATALOG: http://catalog:8080
+         ENDPOINTS_CARTS: http://carts:8080
+         ENDPOINTS_ORDERS: http://orders:8080
+         ENDPOINTS_CHECKOUT: http://checkout:8080
+         ENDPOINTS_ASSETS: http://assets:8080
+    expose:
+      - 8080
+    ports:
+      - 8889:8080
+    networks:
+      - revive
+    restart: always
+    depends_on: 
+      - orders  
+      - checkout  
+      - carts
+      - catalog
+      - ass  
