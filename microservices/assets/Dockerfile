@@ -4,15 +4,22 @@ EXPOSE 8080
 
 RUN amazon-linux-extras install -y nginx1
 
-COPY default.conf /etc/nginx/nginx.conf
-COPY mime.types /etc/nginx/mime.types
-COPY public/ /usr/share/nginx/html
+# Use environment variables for file locations
+ENV NGINX_CONF_FILE=/etc/nginx/nginx.conf \
+    NGINX_MIME_FILE=/etc/nginx/mime.types \
+    NGINX_HTML_DIR=/usr/share/nginx/html
+
+# Copy files only if they exist
+COPY default.conf ${NGINX_CONF_FILE}
+COPY mime.types ${NGINX_MIME_FILE}
+COPY public/ ${NGINX_HTML_DIR}
 
 RUN chown -R nginx:nginx /var/log/nginx && \
-        chown -R nginx:nginx /etc/nginx/conf.d && \
-        chown -R nginx:nginx /usr/share/nginx/html
+    chown -R nginx:nginx /etc/nginx/conf.d && \
+    chown -R nginx:nginx ${NGINX_HTML_DIR}
+
 RUN touch /var/run/nginx.pid && \
-        chown -R nginx:nginx /var/run/nginx.pid
+    chown -R nginx:nginx /var/run/nginx.pid
 
 USER nginx
 
