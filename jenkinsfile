@@ -1,0 +1,70 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: "DOCKERHUB_USERNAME", defaultValue: "", description: "Enter your DockerHub username")   // Your DockerHub username
+        string(name: "DOCKERHUB_REPO", defaultValue: "", description: "Enter your DockerHub repository name") // Your DockerHub repository name
+        string(name: "IMAGE_TAG", defaultValue: "latest", description: "Enter your image tag") // Your image tag
+        choice(name: "git_branch", choices: ["feature", "main", "staging", "preprod", "prod"], description: "Select your branch")
+        string(name: "git_url", defaultValue: "", description: "Enter your Git repository URL")
+        booleanParam(name: "skip_stage", defaultValue: false, description: "Set to true to skip the build stages")
+    }
+
+    stages {
+        stage('Clone Repository') {
+            steps {
+                git branch: "${params.git_branch}", url: "${params.git_url}"
+            }
+        }
+        
+        stage('Build Docker Image') {
+            when {
+                expression { !params.skip_stage }  // Run this stage only if skip_stage is false
+            }
+            steps {
+                sh """
+                docker build -t ${params.DOCKERHUB_USERNAME}/${params.DOCKERHUB_REPO}:${params.IMAGE_TAG} .
+                """
+            }
+        }
+
+        stage('Login to DockerHub') {
+            when {
+                expression { !params.skip_stage }  // Run this stage only if skip_stage is false
+            }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub_cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh """
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    """
+                }
+            }
+        }
+
+        stage('Push Docker Image to DockerHub') {
+            when {
+                expression { !params.skip_stage }  // Run this stage only if skip_stage is false
+            }
+            steps {
+                sh """
+                docker push ${params.DOCKERHUB_USERNAME}/${params.DOCKERHUB_REPO}:${params.IMAGE_TAG}
+                """
+            }
+        }
+
+        stage('Deploy Application') {
+            steps {
+                sh """
+                # Example deployment command, adjust this to your needs
+                docker-compose -f annie-final-docker-compose.yaml up -d
+                """
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'docker logout'
+        }
+    }
+}
